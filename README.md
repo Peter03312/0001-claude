@@ -56,7 +56,7 @@ pytest
 | `echoes[].position` | 有限且 `0 ≤ position < L` |
 | `echoes[].amplitude` | 任意有限数值 |
 
-不允许未知字段。任何非法字段都返回 `422` 与可定位的 `detail[].loc`，且不输出任何部分簇。
+不允许未知字段。任何非法字段都返回 `422` 与可定位的 `detail[].loc`，且不输出任何部分簇。非有限数值（`NaN`、`Infinity`、`-Infinity`）同样按 `422` 处理，错误详情中的 `input` 以字符串形式呈现（如 `"NaN"`），保证响应始终是合法 JSON。
 
 请求示例：
 

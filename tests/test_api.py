@@ -160,6 +160,27 @@ def test_non_finite_echo_values_rejected(bad):
     _assert_422_with_loc(r, "echoes", 0, "amplitude")
 
 
+@pytest.mark.parametrize(
+    "raw, expected_input",
+    [
+        # Regression: a NaN/Infinity input must surface as a locatable 422
+        # with a valid JSON body, never as a 500.
+        ('{"L": 360.0, "G": 10.0, "echoes": [{"position": NaN, "amplitude": 1.0}]}', "NaN"),
+        ('{"L": 360.0, "G": 10.0, "echoes": [{"position": Infinity, "amplitude": 1.0}]}', "Infinity"),
+        ('{"L": 360.0, "G": 10.0, "echoes": [{"position": 1.0, "amplitude": -Infinity}]}', "-Infinity"),
+        ('{"L": NaN, "G": 10.0, "echoes": [{"position": 1.0, "amplitude": 1.0}]}', "NaN"),
+        ('{"L": 360.0, "G": Infinity, "echoes": [{"position": 1.0, "amplitude": 1.0}]}', "Infinity"),
+    ],
+)
+def test_non_finite_input_yields_valid_422_json(raw, expected_input):
+    r = client.post("/clusters", content=raw, headers={"content-type": "application/json"})
+    assert r.status_code == 422
+    body = r.json()  # must parse as JSON; a 500 would not carry detail
+    assert "clusters" not in body
+    detail = body["detail"]
+    assert any(err.get("input") == expected_input for err in detail)
+
+
 def test_unknown_field_rejected():
     r = client.post(
         "/clusters",

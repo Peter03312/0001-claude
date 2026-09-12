@@ -200,13 +200,18 @@ def scenario_validation(client: httpx.Client) -> None:
         check(f"validation: {name} has no partial clusters", "clusters" in body, False)
         locs = [err.get("loc", []) for err in body.get("detail", [])]
         check(f"validation: {name} locates '{field}'", any(field in loc for loc in locs), True)
-    # Non-finite numbers are rejected even though JSON parses them.
+    # Non-finite numbers are rejected even though JSON parses them, and the
+    # 422 body must stay valid, locatable JSON (never a 500).
     r = client.post(
         "/clusters",
         content='{"L": 360.0, "G": 10.0, "echoes": [{"position": NaN, "amplitude": 1.0}]}',
         headers={"content-type": "application/json"},
     )
     check("validation: NaN position -> 422", r.status_code, 422)
+    body = r.json()
+    check("validation: NaN has no partial clusters", "clusters" in body, False)
+    locs = [err.get("loc", []) for err in body.get("detail", [])]
+    check("validation: NaN locates 'position'", any("position" in loc for loc in locs), True)
 
 
 def main() -> int:

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict
-from typing import List
+from typing import Any, List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from .clustering import Echo, cluster_echoes
 from .models import ClusterOut, ScanRequest, ScanResponse
@@ -19,6 +22,32 @@ app = FastAPI(
         "defect clusters, including clusters split across the zero point."
     ),
 )
+
+
+def _sanitize_non_finite(value: Any) -> Any:
+    """Replace non-finite floats with JSON-safe string labels.
+
+    Pydantic error details embed the offending ``input`` value; a raw
+    ``NaN``/``Infinity`` there would crash ``JSONResponse``
+    (``allow_nan=False``) and turn a clean 422 into a 500.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        if math.isnan(value):
+            return "NaN"
+        return "Infinity" if value > 0 else "-Infinity"
+    if isinstance(value, dict):
+        return {key: _sanitize_non_finite(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_non_finite(item) for item in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    detail = _sanitize_non_finite(exc.errors())
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(detail)})
 
 
 def _cross_field_errors(payload: ScanRequest) -> List[dict]:
