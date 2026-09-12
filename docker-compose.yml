@@ -1,0 +1,32 @@
+services:
+  api:
+    build: .
+    image: coil-ut-clustering:latest
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  # One-shot acceptance suite: runs the checks once and exits.
+  #   docker compose run --rm verify
+  # or, to fail the whole stack on a failed check:
+  #   docker compose up --build --exit-code-from verify
+  verify:
+    image: coil-ut-clustering:latest
+    build: .
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_BASE_URL: http://api:8000
+    command: ["python", "-m", "verify.verify"]
+    restart: "no"
